@@ -25,11 +25,11 @@ def print_unicode_board(board, perspective=chess.WHITE):
         print(f" {sc}   h g f e d c b a  {ec}\n")
 
     
-RANDOM_ENGINE = "/home/ben/src/bengine/engines/dist/random_engine/random_engine"
-BENGINE = "/home/ben/src/bengine/engines/dist/bengine/bengine"
+RANDOM_ENGINE = "/home/ben/src/ChessBengine/engines/dist/random_engine/random_engine"
+BENGINE = "/home/ben/src/ChessBengine/engines/dist/bengine/bengine"
 # white_player = HumanPlayer()
 white_player = chess.engine.SimpleEngine.popen_uci(RANDOM_ENGINE)
-black_player = chess.engine.SimpleEngine.popen_uci(BENGINE)
+black_player = chess.engine.SimpleEngine.popen_uci(BENGINE, shell=True)
 board = chess.Board()
 while not board.is_game_over():
     print_unicode_board(board)
