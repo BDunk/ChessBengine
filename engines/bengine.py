@@ -3,12 +3,12 @@ import sys
 import os
 import chess
 import time
-import argparse
+from threading import Thread
 import logging
 from weight_generation import WEIGHTS
-import asyncio
 import time
 import sys
+import copy
 
 if not os.path.exists("log"):
     os.makedirs("log")
@@ -18,7 +18,6 @@ logging.basicConfig(filename=f"./log/bengine_{time.time()}.log", filemode='w', l
 
 
 def evaluate(board):
-    # TODO: Evaluate positions considering developement to be valuable
     value = 0
 
     if board.is_checkmate():
@@ -50,17 +49,18 @@ def evaluate(board):
 
     return value, board.peek()
 
-async def negamax(board, depth, alpha, beta, color):
+def negamax(board, depth, alpha, beta, color):
     if depth == 0:
         result = evaluate(board)
         return color* result[0], result[1]
+    time.sleep(0)
     maximum = -sys.maxsize
     best_move = None
     potential_moves = list(board.legal_moves)
 
     for move in potential_moves:
         board.push(move)
-        result = await negamax(board, depth - 1, -beta, -alpha, -color)
+        result = negamax(board, depth - 1, -beta, -alpha, -color)
         if result == [None, None]:
             return [None, None]
         score = - result[0]
@@ -73,44 +73,45 @@ async def negamax(board, depth, alpha, beta, color):
             break
     return float(maximum), best_move    
 
-async def calculate(board, callback):
-
-    result = None
-
-    start_time = asyncio.get_event_loop().time()
-
+def calculate(board, result_holder):
     depth = 1
+    start_time = time.time()
 
     while True:
-
-        if asyncio.get_event_loop().time() - start_time >= 4:
+        # Perform search operation for the current depth
+        # Replace this with your actual search algorithm
+        logging.debug(f"Performing search at depth {depth}")
+        result = negamax(copy.deepcopy(board), depth, -sys.maxsize, sys.maxsize,-1+2*int(board.turn))        
+        # Store the result in the shared variable
+        result_holder["result"] = result
+        
+        # Check if 3 seconds have passed, and stop the search
+        if time.time() - start_time >= 3:
+            logging.debug("Time limit reached. Stopping search.")
             break
-        logging.debug(f"running for depth {depth}")
-
-        try:
-
-            # Attempt to get a result within the remaining time
-
-            remaining_time = 4 - (asyncio.get_event_loop().time() - start_time)
-
-            result = await asyncio.wait_for(negamax(board, depth, -sys.maxsize, sys.maxsize,-1+2*int(board.turn)), timeout=remaining_time)
-            logging.debug(f"ran at depth {depth}, result {result}")
-            depth = depth+1
-
-        except asyncio.TimeoutError:
-
-            # If do_stuff doesn't complete within the remaining time, move on
-
-            pass
-
-    callback(result[1])
-    logging.info(f"OUT: bestmove {result[1]}")
-    return
+        
+        depth += 1
  
+def search(board):    
+    # Shared variable to hold the search result
+    result_holder = {"result": None}
+    
+    # Create a thread for iterative deepening search
+    search_thread = Thread(target=calculate, args=(board, result_holder))
+    search_thread.start()
+    
+    time.sleep(3)
+    print(f"bestmove {result_holder['result'][1]}")
+    sys.stdout.flush()
+
+    logging.info(f"OUT: bestmove {result_holder['result'][1]}")
+
+    if search_thread.is_alive():
+        search_thread.join()  # wait for child to return itself before returning this one
+     
 
 
-
-async def main():
+def main():
 
     board = chess.Board()
 
@@ -118,7 +119,7 @@ async def main():
 
     while True:
 
-        msg = await asyncio.to_thread(sys.stdin.readline)
+        msg = input()
 
         if not msg:
             break
@@ -131,7 +132,7 @@ async def main():
         logging.info(f"IN: {msg}")
         
         if msg == "quit":
-            sys.exit()
+            break
 
         if msg == "uci":
             print("id name Bengine")
@@ -172,16 +173,15 @@ async def main():
                 board.push_uci(move)
 
         if msg[0:2] == "go":
-            task = asyncio.create_task(calculate(board, lambda x: print(f"bestmove {x}")))
+            task = Thread(target=search, args=[board])
+            task.start()
             tasks.append(task)
             
             continue
-
-        
-
-    await asyncio.gather(*tasks)
- 
+    for t in tasks:
+        t.join()
+    sys.exit()
 
 if __name__ == '__main__':
 
-    asyncio.run(main())
+    main()
